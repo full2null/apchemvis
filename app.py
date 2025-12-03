@@ -172,7 +172,7 @@ def plot_ion_reservoir_simulation():
         fontweight="bold",
     )
 
-    ax2.set_ylabel("Local Ca²⁺ Availability (Normalized)")
+    ax2.set_ylabel("Undissolved Enamel Concentration (Relative Units)")
     ax2.set_xlabel("Time (minutes)")
     ax2.set_title("Mechanism: Smart Ion Release vs. Erosion", fontsize=12)
     ax2.legend()
@@ -228,7 +228,23 @@ class ToothAnimationGenerator:
         )
         self.acid_x = np.random.uniform(-2.5, 2.5, 100)
         self.acid_y = np.random.uniform(2.0, 3.5, 100)
+
+        # Second acid attack particles for phase 4
+        (self.acid_particles2,) = self.ax.plot(
+            [], [], "ro", markersize=4, alpha=0.6, label="Second Acid Attack"
+        )
+        self.acid_x2 = np.random.uniform(-2.5, 2.5, 80)
+        self.acid_y2 = np.random.uniform(2.0, 3.5, 80)
+
+        # Ion reservoir particles (Ca2+, PO4-) from coating
+        (self.ion_particles,) = self.ax.plot(
+            [], [], "bo", markersize=3, alpha=0.7, label="Released Ions (Ca²⁺/PO₄³⁻)"
+        )
+        self.ion_x = []
+        self.ion_y = []
+
         self.coating_poly = None
+        self.coating_thickness = 0
 
     def _create_polygon(self, x, y_top, y_bottom, color, label):
         verts = [(x[0], y_bottom), *zip(x, y_top), (x[-1], y_bottom)]
@@ -267,13 +283,14 @@ class ToothAnimationGenerator:
             if frame % 2 == 0:
                 self.acid_particles.set_alpha(max(0, 0.6 - (frame - 60) / 100))
 
-        else:  # Coating
+        elif frame < 180:  # Coating Application
             self.title.set_text("Phase 3: PCFPC Coating Application")
             self.title.set_color("blue")
             self.acid_particles.set_visible(False)
 
+            self.coating_thickness = (frame - 120) * 0.005
             target = np.minimum(
-                self.current_enamel_y + (frame - 120) * 0.005,
+                self.current_enamel_y + self.coating_thickness,
                 self.current_enamel_y + 0.3,
             )
             if self.coating_poly:
@@ -282,10 +299,69 @@ class ToothAnimationGenerator:
                 self.x_tooth, self.current_enamel_y, target, color="skyblue", alpha=0.6
             )
 
-        return self.enamel_line, self.acid_particles
+        else:  # Phase 4: Acid Resistance Test with Ion Reservoir Effect
+            self.title.set_text(
+                "Phase 4: Ion Reservoir Protection - Ca²⁺/PO₄³⁻ Release"
+            )
+            self.title.set_color("green")
+
+            # Second acid attack
+            self.acid_y2 -= 0.06
+            coating_surface = np.interp(
+                self.acid_x2,
+                self.x_tooth,
+                self.current_enamel_y + self.coating_thickness,
+            )
+            mask2 = self.acid_y2 < coating_surface
+
+            # When acid hits coating, generate ions from coating surface
+            for i in np.where(mask2)[0][:3]:  # Limit ion generation rate
+                if len(self.ion_x) < 50:  # Maximum ions
+                    # Generate ions from coating surface where acid hits
+                    ion_start_x = self.acid_x2[i] + np.random.uniform(-0.1, 0.1)
+                    ion_start_y = coating_surface[i] + 0.05
+                    self.ion_x.append(ion_start_x)
+                    self.ion_y.append(ion_start_y)
+
+            # Move ions upward (released from coating)
+            for j in range(len(self.ion_x)):
+                self.ion_y[j] += 0.03  # Ion release velocity
+                self.ion_x[j] += np.random.uniform(-0.01, 0.01)  # Random drift
+
+            # Remove ions that go too high
+            self.ion_x = [x for x, y in zip(self.ion_x, self.ion_y) if y < 3.0]
+            self.ion_y = [y for y in self.ion_y if y < 3.0]
+
+            # Acid hits coating but bounces off (no penetration due to ion reservoir)
+            self.acid_y2[mask2] = coating_surface[mask2] + 0.15
+
+            self.acid_particles2.set_data(self.acid_x2, self.acid_y2)
+            self.ion_particles.set_data(self.ion_x, self.ion_y)
+
+            # Add ion reservoir explanation text
+            if frame == 200:
+                self.ax.text(
+                    0,
+                    2.0,
+                    "Ion Reservoir Effect:\nCa²⁺/PO₄³⁻ ions maintain Qsp > Ksp",
+                    ha="center",
+                    color="blue",
+                    fontsize=10,
+                    fontweight="bold",
+                    bbox=dict(
+                        boxstyle="round,pad=0.3", facecolor="lightblue", alpha=0.8
+                    ),
+                )
+
+        return (
+            self.enamel_line,
+            self.acid_particles,
+            self.acid_particles2,
+            self.ion_particles,
+        )
 
     def create_gif(self):
-        ani = animation.FuncAnimation(self.fig, self.update, frames=200, interval=50)
+        ani = animation.FuncAnimation(self.fig, self.update, frames=250, interval=50)
         with tempfile.NamedTemporaryFile(delete=False, suffix=".gif") as tmp:
             try:
                 ani.save(tmp.name, writer="pillow", fps=15)
