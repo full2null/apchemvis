@@ -300,9 +300,7 @@ def main():
     st.markdown("---")
 
     # 탭 레이아웃
-    tab1, tab2, tab3 = st.tabs(
-        ["1. 원인 (pH)", "2. 메커니즘 (이온)", "3. 시뮬레이션 (시각)"]
-    )
+    tab1, tab2, tab3 = st.tabs(["1. 원인 (pH)", "2. 메커니즘 (이온)", "3. 시각화"])
 
     with tab1:
         st.header("용해도 vs. pH")
@@ -319,9 +317,9 @@ def main():
         )
 
     with tab3:
-        st.header("시뮬레이션")
+        st.header("시각화")
         if st.button("▶️ 애니메이션 생성 (약 10초)"):
-            with st.spinner("화학 반응 시뮬레이션 중..."):
+            with st.spinner("화학 반응 시각화 중..."):
                 gen = ToothAnimationGenerator()
                 gif_path = gen.create_gif()
                 if gif_path:
